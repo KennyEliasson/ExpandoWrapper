@@ -1,0 +1,86 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Dynamic;
+using System.Linq;
+using System.Reflection;
+
+namespace Bambora.Instore.Infrastructure
+{
+    public class ExpandoWrapper : DynamicObject
+    {
+        // Do we want to save the value? Or is it enough to save the PropertyInfo and the Item associated and getting the value later on?
+        private readonly Dictionary<string, ExpandoValue> _lookup = new Dictionary<string, ExpandoValue>(StringComparer.InvariantCultureIgnoreCase);
+        private readonly Dictionary<string, object> _nestedPropertiesCache = new Dictionary<string, object>(StringComparer.InvariantCultureIgnoreCase);
+
+        public ExpandoWrapper(object item)
+        {
+            AddPropertiesToLookup(item, item.GetType());
+        }
+            
+        private void AddPropertiesToLookup(object item, Type itemType, string prefix = "")
+        {
+            foreach (var propertyInfo in itemType.GetProperties())
+            {
+                var key = prefix + propertyInfo.Name;
+                if (propertyInfo.PropertyType == typeof(string) || propertyInfo.PropertyType.IsValueType || propertyInfo.PropertyType == typeof(object) /*Barebone object*/)
+                {
+                    _lookup.Add(key, new ExpandoValue(propertyInfo, item));
+                }
+                else if (typeof(IEnumerable).IsAssignableFrom(propertyInfo.PropertyType))
+                {
+                    // How handle lists?
+                }
+                else
+                {
+                    if (!_nestedPropertiesCache.TryGetValue(key, out var nestedProperty))
+                    {
+                        nestedProperty = propertyInfo.GetValue(item);
+                        if(nestedProperty == null)
+                            continue;
+                        _nestedPropertiesCache.Add(key, nestedProperty);
+                    }
+                    
+                    AddPropertiesToLookup(nestedProperty, propertyInfo.PropertyType, key + ".");
+                }
+            }
+        }
+
+        public object this[string key] => GetMember(key);
+
+        private object GetMember(string key)
+        {
+            _lookup.TryGetValue(key, out var lookup);
+
+            return lookup?.Value();
+        }
+
+        public override bool TryGetMember(GetMemberBinder binder, out object result)
+        {
+            result = GetMember(binder.Name);
+            return result != null;
+        }
+
+        public List<string> GetAllProperties()
+        {
+            return _lookup.Select(x => x.Key).ToList();
+        }
+    }
+
+    public class ExpandoValue
+    {
+        public ExpandoValue(PropertyInfo propertyInfo, object item)
+        {
+            PropertyInfo = propertyInfo;
+            Item = item;
+        }
+
+        public PropertyInfo PropertyInfo { get; set; }
+        public object Item { get; set; }
+
+        public object Value()
+        {
+            return PropertyInfo.GetValue(Item);
+        }
+    }
+}
