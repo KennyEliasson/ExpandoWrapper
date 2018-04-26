@@ -1,0 +1,41 @@
+public class ExpandoWrapperTests
+{
+    [Fact]
+    public void Can_Get_PropertyValue_From_String_Path()
+    {
+        var person = new Person() {
+            DateOfBirth = new DateTime(1900, 10, 10),
+            Name = "MyName",
+            Mother = new Parent("MyParent") { GrandParent = new Parent("MyGrandParent")}
+        };
+
+        var wrapper = new ExpandoWrapper(person);
+
+        Assert.Equal(person.Name, wrapper["naME"]);
+        Assert.Equal(person.DateOfBirth.ToString(), wrapper["dateOfBirth"].ToString());
+        Assert.Equal(person.Age, wrapper["AgE"]);
+
+        Assert.Equal(person.Mother.Name, wrapper["mOtHer.naMe"]);
+        Assert.Equal(person.Mother.GrandParent.Name, wrapper["mother.GrandParent.name"]);
+    }
+
+
+    public class Person
+    {
+        public string Name { get; set; }
+        public int Age { get; set; }
+        public DateTime DateOfBirth { get; set; }
+        public Parent Mother { get; set; }
+    }
+
+    public class Parent
+    {
+        public Parent(string name)
+        {
+            Name = name;
+        }
+
+        public string Name { get; set; }
+        public Parent GrandParent { get; set; }
+    }
+}
